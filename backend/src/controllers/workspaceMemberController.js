@@ -75,9 +75,50 @@ const getMembers = asyncHandler(async (req, res) => {
   });
 });
 
+const updateMemberRole = asyncHandler(async (req, res) => {
+  const { memberId, workspaceId } = req.params;
+  const { role } = req.body;
+  const userId = req.user.id;
+    //workspace check
+    const wCheck = await db.query("SELECT * FROM workspaces WHERE id = $1", [
+        workspaceId,
+    ]);
+    if (wCheck.rows.length == 0) {
+        return res.status(400).json({ message: "WorkSpace doesnt exist" });
+    } 
+    //check if logged in user is the owner of the workspace
+    if (wCheck.rows[0].owner_id != userId) {
+        return res
+        .status(403)
+        .json({ message: "You arent the owner of the workspace" });
+    }
+    //check if user exists
+    const userCheck = await db.query("SELECT * FROM users WHERE id = $1", [
+        memberId,
+    ]);
+    if (userCheck.rows.length == 0) {
+        return res.status(400).json({ message: "User doesnt exist" });
+    }
+
+    const memberUserId = userCheck.rows[0].id;
+    //check if the member already exist
+    const check = await db.query(
+        "SELECT * FROM workspace_members WHERE workspace_id = $1 AND user_id = $2",
+        [workspaceId, memberUserId],
+    );
+    if (check.rows.length == 0) {
+        return res.status(400).json({ message: "User is not a member of the workspace" });
+    }
+    //update the member role
+    await db.query(
+        "UPDATE workspace_members SET role = $1 WHERE workspace_id = $2 AND user_id = $3",
+        [role, workspaceId, memberUserId],
+    );
+    return res.status(200).json({ message: "Member role updated successfully" });
+});
+
 const removeMember = asyncHandler(async (req, res) => {
-  const { workspaceId } = req.params;
-  const { email } = req.body;
+  const { workspaceId, memberId } = req.params;
   const userId = req.user.id;
 
   //workspace check
@@ -96,8 +137,8 @@ const removeMember = asyncHandler(async (req, res) => {
   }
 
   //check if user exists
-  const userCheck = await db.query("SELECT * FROM users WHERE email = $1", [
-    email,
+  const userCheck = await db.query("SELECT * FROM users WHERE id = $1", [
+    memberId,
   ]);
   if (userCheck.rows.length == 0) {
     return res.status(400).json({ message: "User doesnt exist" });
@@ -123,4 +164,4 @@ const removeMember = asyncHandler(async (req, res) => {
   return res.status(200).json({ message: "Member removed successfully" });
 });
 
-export { inviteMember, getMembers, removeMember };
+export { inviteMember, getMembers, updateMemberRole, removeMember };
